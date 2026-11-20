@@ -1,58 +1,132 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Weather Forecast Collector
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+A Laravel application that collects daily weather forecasts from Open-Meteo and WeatherAPI. It stores hourly and daily temperature and precipitation data in PostgreSQL and provides a simple JSON API.
 
-## About Laravel
+## 1. Installation and Setup
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+### Requirements
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+- Docker and Docker Compose
+- A free API key from [WeatherAPI](https://www.weatherapi.com/)
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+### Installation
 
-## Learning Laravel
-
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
-
-In addition, [Laracasts](https://laracasts.com) contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
-
-You can also watch bite-sized lessons with real-world projects on [Laravel Learn](https://laravel.com/learn), where you will be guided through building a Laravel application from scratch while learning PHP fundamentals.
-
-## Agentic Development
-
-Laravel's predictable structure and conventions make it ideal for AI coding agents like Claude Code, Cursor, and GitHub Copilot. Install [Laravel Boost](https://laravel.com/docs/ai) to supercharge your AI workflow:
+- Clone the repository and enter the project folder.
+- Add your WeatherAPI key to the `.env` file: `WEATHERAPI_KEY=your_key_here`
+- Start the application using Docker Compose:
 
 ```bash
-composer require laravel/boost --dev
-
-php artisan boost:install
+docker compose up -d --build
+docker compose exec app php artisan key:generate
+docker compose restart
 ```
 
-Boost provides your agent 15+ tools and skills that help agents build Laravel applications while following best practices.
+- The application automatically runs the database migrations and adds one default location (Drama, Greece).
+- The application is available at [http://localhost:8000](http://localhost:8000).
 
-## Contributing
+### Running the Fetch
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+- The `scheduler` container runs `forecasts:fetch` every day at 06:00 AM.
+- To run it manually:
 
-## Code of Conduct
+```bash
+docker compose exec app php artisan forecasts:fetch
+```
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+### API
 
-## Security Vulnerabilities
+The application provides two endpoints:
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+- `GET /api/locations`: Returns all active locations.
+- `GET /api/locations/{id}/forecasts`: Returns the latest daily forecasts from each provider for a location.
 
-## License
+For more specific results, the forecasts endpoint supports the following optional parameters:
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+- `type=daily` (default) or `type=hourly`
+- `provider=open_meteo` or `provider=weatherapi`
+- `issued_on=YYYY-MM-DD`: Gets forecasts from a specific date.
+
+Example:
+
+[http://localhost:8000/api/locations/1/forecasts?type=hourly&provider=weatherapi](http://localhost:8000/api/locations/1/forecasts?type=hourly&provider=weatherapi)
+
+## 2. Implementation Choices
+
+### Technologies
+
+- PHP 8.4
+- Laravel 13
+- PostgreSQL 16
+- Docker and Docker Compose
+
+### Docker Setup
+
+The project uses three Docker services:
+
+- `app`: Runs the Laravel API using `php artisan serve`.
+- `scheduler`: Runs the Laravel scheduler using `php artisan schedule:work`.
+- `db`: Runs PostgreSQL.
+
+### Database Structure
+
+The database has four main tables:
+
+- `locations`: Stores the locations for which forecasts are collected. The `is_active` field allows a location to be disabled without deleting its data, making it easier to support more cities in the future.
+- `forecast_fetches`: Stores each API request, including its provider, location, date, status and any error message.
+- `hourly_forecasts`: Stores hourly temperature and precipitation data.
+- `daily_forecasts`: Stores daily minimum and maximum temperatures and total precipitation.
+
+### Forecast History
+
+Instead of overwriting old forecasts, the application keeps every forecast it collects.
+
+Weather providers can change their forecasts from day to day. For this reason, each forecast is stored with an `issued_on` date.
+
+This allows us to compare forecasts for the same day that were collected at different times. By default, the API returns the latest forecast.
+
+For daily data, I store minimum and maximum temperatures instead of averages.
+
+Both providers offer minimum temperature, maximum temperature and total precipitation, so I use the same data fields for both.
+
+### Weather Providers
+
+The application uses a simple `WeatherProvider` interface with two methods: `name()` and `fetch()`.
+
+Each provider (`OpenMeteoProvider` and `WeatherApiProvider`) handles its own API request and converts the response into a common format.
+
+Both providers use the same field names and units (°C and mm). Hourly times are stored in UTC, while daily dates use the local date of each location.
+
+The rest of the application does not depend on a specific provider.
+
+### Error Handling
+
+- Each provider runs independently. If one fails, the other can still save its data.
+- Failed requests are stored in `forecast_fetches` with their status and error message.
+- Running the command more than once on the same day does not create duplicate records.
+- Database unique constraints help prevent duplicates.
+
+### API Limits
+
+The application makes two API requests per location each day, one for each provider.
+
+## 3. Incomplete Requirements
+
+- No automated tests.
+- No daily monitoring or regular checks of the fetch process.
+- No validation for API query parameters. For example, an unknown `type` falls back to `daily`.
+- No API authentication.
+
+## 4. Future Improvements
+
+- Add more weather data, such as humidity and wind.
+- Store actual weather data for the current day.
+- Add more weather providers.
+- Add user accounts with the option to save favorite cities.
+- Combine data from all providers to produce more accurate forecasts.
+- Send alerts to users about extreme weather changes, such as sudden temperature changes.
+- Compare previous forecasts with actual weather data to measure provider accuracy.
+
+## 5. Additional Notes
+
+- The default location is Drama, Greece. More locations can be added to the `locations` table. The application collects forecasts for all active locations.
+- I used an AI assistant during development, as allowed by the assignment.

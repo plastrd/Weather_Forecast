@@ -13,4 +13,10 @@ class Location extends Model
         'lon' => 'float',
         'altitude_m' => 'integer',
         'is_active' => 'boolean',
-    ];}
+    ];
+    
+    public function fetches()
+    {
+        return $this->hasMany(ForecastFetch::class);
+    }
+}
