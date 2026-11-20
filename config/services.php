@@ -34,5 +34,13 @@ return [
             'channel' => env('SLACK_BOT_USER_DEFAULT_CHANNEL'),
         ],
     ],
-
+    
+    'open_meteo' => [
+    'base_url' => 'https://api.open-meteo.com/v1',
+     ],
+     
+    'weatherapi' => [
+    'base_url' => 'https://api.weatherapi.com/v1',
+    'key'      => env('WEATHERAPI_KEY'),
+],
 ];

@@ -2,7 +2,7 @@
 
 namespace Database\Seeders;
 
-use App\Models\User;
+use App\Models\Location;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 
@@ -15,11 +15,9 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        // User::factory(10)->create();
-
-        User::factory()->create([
-            'name' => 'Test User',
-            'email' => 'test@example.com',
-        ]);
+       Location::updateOrCreate(
+        ['lat' =>  41.1528, 'lon' => 24.1473],        
+        ['name' => 'Drama', 'region' => 'East Macedonia and Thrace', 'country' => 'Greece', 'continent' => 'Europe', 'timezone' => 'Europe/Athens', 'altitude_m' => 111]
+       );
     }
 }
